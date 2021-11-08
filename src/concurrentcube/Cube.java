@@ -21,7 +21,7 @@ public class Cube {
         return switch (anchorSide) {
             case 0 -> (prevSide % 4) + 3;
             case 1 -> (5 * (prevSide % 3) + 2) % 7 + 4 * (prevSide % 2);
-            case 2 -> (8 * (prevSide + 3) % 42) % 7;
+            case 2 -> ((8 * (prevSide + 3)) % 42) % 7;
             case 3 -> ((prevSide % 3) + 4) % 6 + 2 * (prevSide % 2);
             case 4 -> ((4 * prevSide + 1) % 18) % 13;
             default -> (prevSide % 4) + 1;
