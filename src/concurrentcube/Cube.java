@@ -22,8 +22,8 @@ public class Cube {
     // totalna magia, najlepiej nie zastanawiać się nad tym, jak działa
     private int nextSide(int anchorSide, int prevSide) {
         return switch (anchorSide) {
-            case 0 -> (prevSide % 4) + 3;
-            case 1 -> (5 * (prevSide % 3) + 2) % 7 + 4 * (prevSide % 2);
+            case 0 -> prevSide == 1 ? 4 : prevSide - 1;
+            case 1 -> (5 * (prevSide % 3) + 2) % 7 - (prevSide % 2);
             case 2 -> ((8 * prevSide + 3) % 42) % 11;
             case 3 -> ((prevSide % 3) + 4) % 6 + 2 * (prevSide % 2);
             case 4 -> ((4 * prevSide + 1) % 18) % 13;
