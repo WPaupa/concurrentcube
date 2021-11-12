@@ -111,8 +111,9 @@ public class Cube {
 
         int currentSide = side == 5 || side == 0 ? 1 : 0;
         int trueLayer = doWeChangeLayers(side, currentSide) ? layer : size - layer - 1;
+        int syncLayer = side < getOppositeSide(side) ? layer : size - layer - 1;
 
-        sync.startLayer(trueLayer);
+        sync.startLayer(syncLayer);
         beforeRotation.accept(side, layer);
 
         // rotacja ścianki przyczepionej do warstwy, o ile taka istnieje
@@ -165,7 +166,7 @@ public class Cube {
             cube[currentSide][trueLayer] = buffer;
 
         afterRotation.accept(side, layer);
-        sync.endLayer(trueLayer);
+        sync.endLayer(syncLayer);
         sync.end(sideToAxis(side));
     }
 
