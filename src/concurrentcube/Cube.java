@@ -1,6 +1,9 @@
 package concurrentcube;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.function.BiConsumer;
+import java.util.stream.IntStream;
 
 public class Cube {
 
@@ -8,12 +11,12 @@ public class Cube {
     BiConsumer<Integer, Integer> beforeRotation, afterRotation;
     Runnable beforeShowing, afterShowing;
 
-    int[][][] cube;
+    Integer[][][] cube;
     int size;
 
     // tutaj minimalna magia
     private int sideToAxis(int side) {
-        return ((side+2)%5)%3;
+        return ((side + 2) % 5) % 3;
     }
 
     // totalna magia, najlepiej nie zastanawiać się nad tym, jak działa
@@ -21,7 +24,7 @@ public class Cube {
         return switch (anchorSide) {
             case 0 -> (prevSide % 4) + 3;
             case 1 -> (5 * (prevSide % 3) + 2) % 7 + 4 * (prevSide % 2);
-            case 2 -> ((8 * (prevSide + 3)) % 42) % 7;
+            case 2 -> ((8 * prevSide + 3) % 42) % 11;
             case 3 -> ((prevSide % 3) + 4) % 6 + 2 * (prevSide % 2);
             case 4 -> ((4 * prevSide + 1) % 18) % 13;
             default -> (prevSide % 4) + 1;
@@ -40,9 +43,18 @@ public class Cube {
                 BiConsumer<Integer, Integer> afterRotation,
                 Runnable beforeShowing,
                 Runnable afterShowing) {
-        Sync sync = new Sync(size);
-        cube = new int[6][size][size];
+        sync = new Sync(size);
+        cube = new Integer[6][size][size];
+        for (int i = 0; i < 6; i++)
+            for (int j = 0; j < size; j++)
+                for (int k = 0; k < size; k++)
+                    cube[i][j][k] = i;
         this.size = size;
+
+        this.beforeShowing = beforeShowing;
+        this.beforeRotation = beforeRotation;
+        this.afterShowing = afterShowing;
+        this.afterRotation = afterRotation;
     }
 
     public void rotateClockwise(int side) {
@@ -63,19 +75,47 @@ public class Cube {
         rotateClockwise(side);
     }
 
+    private Integer[] col(int number, int side) {
+        return Arrays.stream(cube[side]).map(x -> x[number]).toArray(Integer[]::new);
+    }
+
+    private void setCol(int number, int side, Integer[] col) {
+        IntStream.range(0, size).forEach(x -> cube[side][x][number] = col[x]);
+    }
+
+    private boolean doWeFlip(int side, int currentSide) {
+        return switch (side) {
+            case 0 -> true;
+            case 1 -> currentSide == 4;
+            case 3 -> currentSide != 4;
+            case 2 -> currentSide == 1 ||
+                    currentSide == 5;
+            case 4 -> currentSide != 1 &&
+                    currentSide != 5;
+            default -> false;
+        };
+    }
+
+    boolean isRotatingHorizontal(int side, int currentSide) {
+        if (sideToAxis(side) == 2)
+            return true;
+        return sideToAxis(currentSide) == 2 && sideToAxis(side) == 1;
+    }
+
+    boolean doWeChangeLayers(int side, int currentSide) {
+        return doWeFlip(side, currentSide) != isRotatingHorizontal(side, currentSide);
+    }
+
     public void rotate(int side, int layer) throws InterruptedException {
         sync.start(sideToAxis(side));
 
-        int firstSide = side == 5 || side == 0 ? 1 : 0;
-
-        //nadal totalna magia
-        boolean isRotatingHorizontal = sideToAxis(firstSide) + 2*sideToAxis(side) > 4;
-        boolean startFromFirstLayer = nextSide(1, side) == firstSide || nextSide(2, side) == firstSide;
-
-        int trueLayer = startFromFirstLayer ? layer : size - layer - 1;
+        int currentSide = side == 5 || side == 0 ? 1 : 0;
+        int trueLayer = doWeChangeLayers(side, currentSide) ? layer : size - layer - 1;
 
         sync.startLayer(trueLayer);
+        beforeRotation.accept(side, layer);
 
+        // rotacja ścianki przyczepionej do warstwy, o ile taka istnieje
         if (trueLayer == 0)
             if (layer == 0)
                 rotateClockwise(side);
@@ -87,15 +127,59 @@ public class Cube {
             else
                 rotateCounterclockwise(getOppositeSide(side));
 
+        // rotacja warstwy
+        Integer[] buffer = new Integer[size];
+        for (int i = 1; i <= 4; i++) {
+            trueLayer = doWeChangeLayers(side, currentSide) ? layer : size - layer - 1;
+            Integer[] tempBuffer;
+            if (isRotatingHorizontal(side, currentSide))
+                tempBuffer = col(trueLayer, currentSide);
+            else
+                tempBuffer = cube[currentSide][trueLayer];
 
+            // System.out.println(side + ", " + currentSide + " layer " + trueLayer);
+            // System.out.println((isRotatingHorizontal(side, currentSide) ? "horizontal " : "vertical ") +
+            //         (doWeFlip(side, currentSide) ? "flipped" : "regular"));
+            if (doWeFlip(side, currentSide)) {
+                Collections.reverse(Arrays.asList(tempBuffer));
+                Collections.reverse(Arrays.asList(buffer));
+            }
+            if (isRotatingHorizontal(side, currentSide))
+                setCol(trueLayer, currentSide, buffer);
+            else
+                cube[currentSide][trueLayer] = buffer;
+
+            buffer = tempBuffer;
+            currentSide = nextSide(side, currentSide);
+            // for (var p : buffer)
+            //     System.out.print(p + " ");
+            // System.out.println();
+        }
+
+        trueLayer = doWeChangeLayers(side, currentSide) ? layer : size - layer - 1;
+        if (doWeFlip(side, currentSide))
+            Collections.reverse(Arrays.asList(buffer));
+        if (isRotatingHorizontal(side, currentSide))
+            setCol(trueLayer, currentSide, buffer);
+        else
+            cube[currentSide][trueLayer] = buffer;
+
+        afterRotation.accept(side, layer);
         sync.endLayer(trueLayer);
         sync.end(sideToAxis(side));
     }
 
     public String show() throws InterruptedException {
+        StringBuilder res = new StringBuilder();
         sync.start(3);
+        beforeShowing.run();
+        for (int i = 0; i < 6; i++)
+            for (int j = size - 1; j >= 0; j--)
+                for (int k = size - 1; k >= 0; k--)
+                    res.append(cube[i][k][j]);
+        afterShowing.run();
         sync.end(3);
-        return "";
+        return res.toString();
     }
 
 }
