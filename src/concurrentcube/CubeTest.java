@@ -3,6 +3,7 @@ package concurrentcube;
 import org.junit.jupiter.api.Test;
 
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 class CubeTest {
@@ -74,7 +75,7 @@ class CubeTest {
     }
 
     @Test
-    void singleConcurrencyTest() {
+    void singleSafetyTest() {
         AtomicInteger currentSide = new AtomicInteger(-1);
         AtomicInteger inCritSection = new AtomicInteger(0);
         Cube cube = new Cube(3, (x,y) -> {
@@ -102,9 +103,27 @@ class CubeTest {
     }
 
     @Test
-    void multipleConcurrencyTests() {
+    void multipleSafetyTests() {
         for (int i = 0; i < 1000; i++)
-            singleConcurrencyTest();
+            singleSafetyTest();
+    }
+
+    // destined to fail
+    @Test
+    void livelinessTest() {
+        AtomicBoolean correct = new AtomicBoolean(false);
+        AtomicInteger inCrit = new AtomicInteger(0);
+        Cube cube = new Cube(3, (x,y) -> inCrit.incrementAndGet(),
+                (x, y) -> {inCrit.decrementAndGet(); if (x == 2) correct.set(true);}, () -> {}, () -> {});
+        Thread t0 = new Thread(new Mover(2, 1, cube));
+        boolean t0started = false;
+        do {
+            new Thread(new Mover(1, 1, cube)).start();
+            if (inCrit.get() > 1000 && !t0started) {
+                t0started = true;
+                t0.start();
+            }
+        } while (!correct.get());
     }
 
 }
