@@ -85,32 +85,35 @@ public class Cube {
 
     private boolean doWeFlip(int side, int currentSide) {
         return switch (side) {
-            case 0 -> true;
-            case 1 -> currentSide == 4;
-            case 3 -> currentSide != 4;
-            case 2 -> currentSide == 1 ||
-                    currentSide == 5;
-            case 4 -> currentSide != 1 &&
+            case 0 -> false;
+            case 1 -> currentSide != 4;
+            case 3 -> currentSide == 4;
+            case 2 -> currentSide != 1 &&
                     currentSide != 5;
-            default -> false;
+            case 4 -> currentSide == 1 ||
+                    currentSide == 5;
+            default -> true;
         };
     }
 
-    boolean isRotatingHorizontal(int side, int currentSide) {
+    boolean isRotatingVertical(int side, int currentSide) {
         if (sideToAxis(side) == 2)
             return true;
         return sideToAxis(currentSide) == 2 && sideToAxis(side) == 1;
     }
 
     boolean doWeChangeLayers(int side, int currentSide) {
-        return doWeFlip(side, currentSide) != isRotatingHorizontal(side, currentSide);
+        return doWeFlip(side, currentSide) != isRotatingVertical(side, currentSide);
     }
 
     public void rotate(int side, int layer) throws InterruptedException {
         sync.start(sideToAxis(side));
 
         int currentSide = side == 5 || side == 0 ? 1 : 0;
+        // layer to numer warsty względem ścianki, którą obracamy
+        // potrzebujemy wyłuskać numer warstwy odpowiadający numerowi wiersza/kolumny
         int trueLayer = doWeChangeLayers(side, currentSide) ? layer : size - layer - 1;
+        // oraz uniwersalny numer warstwy potrzebny do synchronizacji
         int syncLayer = side < getOppositeSide(side) ? layer : size - layer - 1;
 
         sync.startLayer(syncLayer);
@@ -133,22 +136,22 @@ public class Cube {
         for (int i = 1; i <= 4; i++) {
             trueLayer = doWeChangeLayers(side, currentSide) ? layer : size - layer - 1;
             Integer[] tempBuffer;
-            if (isRotatingHorizontal(side, currentSide))
-                tempBuffer = col(trueLayer, currentSide);
-            else
+            if (isRotatingVertical(side, currentSide))
                 tempBuffer = cube[currentSide][trueLayer];
+            else
+                tempBuffer = col(trueLayer, currentSide);
 
             // System.out.println(side + ", " + currentSide + " layer " + trueLayer);
-            // System.out.println((isRotatingHorizontal(side, currentSide) ? "horizontal " : "vertical ") +
+            // System.out.println((isRotatingVertical(side, currentSide) ? "vertical " : "horizontal ") +
             //         (doWeFlip(side, currentSide) ? "flipped" : "regular"));
             if (doWeFlip(side, currentSide)) {
                 Collections.reverse(Arrays.asList(tempBuffer));
                 Collections.reverse(Arrays.asList(buffer));
             }
-            if (isRotatingHorizontal(side, currentSide))
-                setCol(trueLayer, currentSide, buffer);
-            else
+            if (isRotatingVertical(side, currentSide))
                 cube[currentSide][trueLayer] = buffer;
+            else
+                setCol(trueLayer, currentSide, buffer);
 
             buffer = tempBuffer;
             currentSide = nextSide(side, currentSide);
@@ -160,10 +163,10 @@ public class Cube {
         trueLayer = doWeChangeLayers(side, currentSide) ? layer : size - layer - 1;
         if (doWeFlip(side, currentSide))
             Collections.reverse(Arrays.asList(buffer));
-        if (isRotatingHorizontal(side, currentSide))
-            setCol(trueLayer, currentSide, buffer);
-        else
+        if (isRotatingVertical(side, currentSide))
             cube[currentSide][trueLayer] = buffer;
+        else
+            setCol(trueLayer, currentSide, buffer);
 
         afterRotation.accept(side, layer);
         sync.endLayer(syncLayer);
@@ -175,9 +178,9 @@ public class Cube {
         sync.start(3);
         beforeShowing.run();
         for (int i = 0; i < 6; i++)
-            for (int j = size - 1; j >= 0; j--)
-                for (int k = size - 1; k >= 0; k--)
-                    res.append(cube[i][k][j]);
+            for (int j = 0; j < size; j++)
+                for (int k = 0; k < size; k++)
+                    res.append(cube[i][j][k]);
         afterShowing.run();
         sync.end(3);
         return res.toString();
