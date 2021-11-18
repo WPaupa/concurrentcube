@@ -32,7 +32,7 @@ public class Cube {
     }
 
     private int getOppositeSide(int side) {
-        for (int i = 0; i < 5; i++)
+        for (int i = 0; i < 6; i++)
             if (sideToAxis(i) == sideToAxis(side) && i != side)
                 return i;
         return -1;
@@ -96,14 +96,48 @@ public class Cube {
         };
     }
 
-    boolean isRotatingVertical(int side, int currentSide) {
+    boolean isRotatingHorizontal(int side, int currentSide) {
         if (sideToAxis(side) == 2)
             return true;
         return sideToAxis(currentSide) == 2 && sideToAxis(side) == 1;
     }
 
     boolean doWeChangeLayers(int side, int currentSide) {
-        return doWeFlip(side, currentSide) != isRotatingVertical(side, currentSide);
+        return doWeFlip(side, currentSide) == isRotatingHorizontal(side, currentSide);
+    }
+
+    private Integer[] exchange(Integer[] to, int side, int currentSide, int layer) {
+        // System.out.println("SIDE " + side + " CURRSIDE " + currentSide + " L" + layer);
+        int trueLayer = doWeChangeLayers(side, currentSide) ? size - layer - 1 : layer;
+        // System.out.println("TL"+trueLayer + " FLIP " + doWeFlip(side,currentSide)
+        // + " HORI " + isRotatingHorizontal(side, currentSide) + " CL "
+        //         + doWeChangeLayers(side, currentSide));
+        Integer[] buffer;
+        if (isRotatingHorizontal(side, currentSide))
+            buffer = cube[currentSide][trueLayer];
+        else
+            buffer = col(trueLayer, currentSide);
+
+        if (doWeFlip(side, currentSide)) {
+            Collections.reverse(Arrays.asList(buffer));
+            Collections.reverse(Arrays.asList(to));
+        }
+        if (isRotatingHorizontal(side, currentSide))
+            cube[currentSide][trueLayer] = to;
+        else
+            setCol(trueLayer, currentSide, to);
+
+        // for (var p : buffer)
+        //     System.out.print(p + " ");
+        // System.out.println();
+        return buffer;
+    }
+
+    private void rotateFace(int side, int layer) {
+        if (layer == 0)
+            rotateClockwise(side);
+        else
+            rotateCounterclockwise(getOppositeSide(side));
     }
 
     public void rotate(int side, int layer) throws InterruptedException {
@@ -112,7 +146,7 @@ public class Cube {
         int currentSide = side == 5 || side == 0 ? 1 : 0;
         // layer to numer warsty względem ścianki, którą obracamy
         // potrzebujemy wyłuskać numer warstwy odpowiadający numerowi wiersza/kolumny
-        int trueLayer = doWeChangeLayers(side, currentSide) ? layer : size - layer - 1;
+        int trueLayer = doWeChangeLayers(side, currentSide) ? size - layer - 1 : layer;
         // oraz uniwersalny numer warstwy potrzebny do synchronizacji
         int syncLayer = side < getOppositeSide(side) ? layer : size - layer - 1;
 
@@ -120,53 +154,14 @@ public class Cube {
         beforeRotation.accept(side, layer);
 
         // rotacja ścianki przyczepionej do warstwy, o ile taka istnieje
-        if (trueLayer == 0)
-            if (layer == 0)
-                rotateClockwise(side);
-            else
-                rotateCounterclockwise(side);
-        if (trueLayer == size - 1)
-            if (trueLayer == size - 1)
-                rotateClockwise(getOppositeSide(side));
-            else
-                rotateCounterclockwise(getOppositeSide(side));
+        rotateFace(side, layer);
 
         // rotacja warstwy
         Integer[] buffer = new Integer[size];
-        for (int i = 1; i <= 4; i++) {
-            trueLayer = doWeChangeLayers(side, currentSide) ? layer : size - layer - 1;
-            Integer[] tempBuffer;
-            if (isRotatingVertical(side, currentSide))
-                tempBuffer = cube[currentSide][trueLayer];
-            else
-                tempBuffer = col(trueLayer, currentSide);
-
-            // System.out.println(side + ", " + currentSide + " layer " + trueLayer);
-            // System.out.println((isRotatingVertical(side, currentSide) ? "vertical " : "horizontal ") +
-            //         (doWeFlip(side, currentSide) ? "flipped" : "regular"));
-            if (doWeFlip(side, currentSide)) {
-                Collections.reverse(Arrays.asList(tempBuffer));
-                Collections.reverse(Arrays.asList(buffer));
-            }
-            if (isRotatingVertical(side, currentSide))
-                cube[currentSide][trueLayer] = buffer;
-            else
-                setCol(trueLayer, currentSide, buffer);
-
-            buffer = tempBuffer;
+        for (int i = 0; i <= 4; i++) {
+            buffer = exchange(buffer, side, currentSide, layer);
             currentSide = nextSide(side, currentSide);
-            // for (var p : buffer)
-            //     System.out.print(p + " ");
-            // System.out.println();
         }
-
-        trueLayer = doWeChangeLayers(side, currentSide) ? layer : size - layer - 1;
-        if (doWeFlip(side, currentSide))
-            Collections.reverse(Arrays.asList(buffer));
-        if (isRotatingVertical(side, currentSide))
-            cube[currentSide][trueLayer] = buffer;
-        else
-            setCol(trueLayer, currentSide, buffer);
 
         afterRotation.accept(side, layer);
         sync.endLayer(syncLayer);

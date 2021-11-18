@@ -206,4 +206,30 @@ class CubeTest {
         }
     }
 
+    @Test
+    void faceRotateTest() {
+        Cube cube = new Cube(3,(x,y) -> {}, (x,y) -> {}, () -> {}, () -> {});
+        try {
+            cube.rotate(2,0);
+            cube.rotate(0,0);
+            assert Objects.equals(cube.show(), "100100100222115115033222222444033033115444444333555555");
+            cube.rotate(5,2);
+            String s = cube.show();
+            cube.rotate(1,0);
+            assert Objects.equals(cube.show(), "400400411111111555022022122033033033445445443233255255");
+            cube.rotate(3,2);
+            assert Objects.equals(cube.show(), s);
+            cube.rotate(3,0);
+            assert Objects.equals(cube.show(), "002002112115115115223225225000333333144044044334554554");
+            cube.rotate(1,2);
+            assert Objects.equals(cube.show(), s);
+            cube.rotate(5,0);
+            assert Objects.equals(cube.show(), "000000111115115444222222115033033222444444033553553553");
+            cube.rotate(0,2);
+            assert Objects.equals(cube.show(), s);
+        } catch (InterruptedException e) {
+            assert false;
+        }
+    }
+
 }
