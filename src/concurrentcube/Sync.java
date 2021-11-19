@@ -6,19 +6,19 @@ public class Sync {
     private final Semaphore mutex;
     private final Semaphore[] waitingRotations;
     private final Semaphore waitingAxes;
-    private final Semaphore ended;
 
     private final int[] rotationsWaiting;
     private int currentAxis = -1;
     private int rotationsRunning;
-    private int rotationsEnded;
     private int axesWaiting;
+    private int allRotationsWaiting;
 
     void start(int axis) throws InterruptedException {
         mutex.acquire();
         if (currentAxis == -1)
             currentAxis = axis;
-        else if (currentAxis != axis) {
+        else if (currentAxis != axis || allRotationsWaiting - rotationsWaiting[axis] > 0) {
+            allRotationsWaiting++;
             rotationsWaiting[axis]++;
             if (rotationsWaiting[axis] == 1) {
                 axesWaiting++;
@@ -31,6 +31,7 @@ public class Sync {
                 waitingRotations[axis].acquire();
             }
             rotationsWaiting[axis]--;
+            allRotationsWaiting--;
         }
         rotationsRunning++;
         if (rotationsWaiting[axis] > 0)
@@ -42,20 +43,15 @@ public class Sync {
     void end(int axis) throws InterruptedException {
         mutex.acquire();
         rotationsRunning--;
-        if (rotationsRunning > 0) {
-            rotationsEnded++;
+        if (rotationsRunning == 0) {
+            if (axesWaiting > 0)
+                waitingAxes.release();
+            else {
+                currentAxis = -1;
+                mutex.release();
+            }
+        } else
             mutex.release();
-            ended.acquire();
-            rotationsEnded--;
-        }
-        if (rotationsEnded > 0)
-            ended.release();
-        else if (axesWaiting > 0)
-            waitingAxes.release();
-        else {
-            currentAxis = -1;
-            mutex.release();
-        }
     }
 
     Semaphore[] waitingForLayers;
@@ -71,7 +67,6 @@ public class Sync {
     public Sync(int size) {
         mutex = new Semaphore(1);
         waitingAxes = new Semaphore(0);
-        ended = new Semaphore(0);
         waitingRotations = new Semaphore[4];
         for (int i = 0; i < 4; i++)
             waitingRotations[i] = new Semaphore(0);

@@ -97,26 +97,30 @@ class CubeTest {
 
     @Test
     void multipleSafetyTests() {
-        for (int i = 0; i < 1000; i++)
+        for (int i = 0; i < 50000; i++)
             singleSafetyTest();
     }
 
-    // destined to fail
     @Test
     void livelinessTest() {
-        AtomicBoolean correct = new AtomicBoolean(false);
-        AtomicInteger inCrit = new AtomicInteger(0);
-        Cube cube = new Cube(3, (x,y) -> inCrit.incrementAndGet(),
-                (x, y) -> {inCrit.decrementAndGet(); if (x == 2) correct.set(true);}, () -> {}, () -> {});
+        class Tester {
+            int inCrit = 0;
+            boolean correct = false;
+        }
+        Tester test = new Tester();
+        Cube cube = new Cube(1000, (x,y) -> ++test.inCrit,
+                (x, y) -> {--test.inCrit; if (x == 2) test.correct = true;}, () -> {}, () -> {});
         Thread t0 = new Thread(new Mover(2, 1, cube));
         boolean t0started = false;
+        int i = 0;
         do {
-            new Thread(new Mover(1, 1, cube)).start();
-            if (inCrit.get() > 1000 && !t0started) {
+            new Thread(new Mover(1, i++, cube)).start();
+            i %= 1000;
+            if (test.inCrit > 100 && !t0started) {
                 t0started = true;
                 t0.start();
             }
-        } while (!correct.get());
+        } while (!test.correct);
     }
 
     @Test
