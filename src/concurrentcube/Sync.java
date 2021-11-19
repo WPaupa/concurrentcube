@@ -20,15 +20,24 @@ public class Sync {
         else if (currentAxis != axis || allRotationsWaiting - rotationsWaiting[axis] > 0) {
             allRotationsWaiting++;
             rotationsWaiting[axis]++;
-            if (rotationsWaiting[axis] == 1) {
-                axesWaiting++;
+            try {
+                if (rotationsWaiting[axis] == 1) {
+                    axesWaiting++;
+                    mutex.release();
+                    waitingAxes.acquire();
+                    axesWaiting--;
+                    currentAxis = axis;
+                } else {
+                    mutex.release();
+                    waitingRotations[axis].acquire();
+                }
+            } catch (InterruptedException e) {
+                mutex.acquireUninterruptibly();
+                rotationsWaiting[axis]--;
+                if (rotationsWaiting[axis] == 0)
+                    axesWaiting--;
                 mutex.release();
-                waitingAxes.acquire();
-                axesWaiting--;
-                currentAxis = axis;
-            } else {
-                mutex.release();
-                waitingRotations[axis].acquire();
+                throw e;
             }
             rotationsWaiting[axis]--;
             allRotationsWaiting--;
