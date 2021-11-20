@@ -1,9 +1,7 @@
-package concurrentcube;
-
+import concurrentcube.Cube;
 import org.junit.jupiter.api.Test;
 
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 class CubeTest {
@@ -22,6 +20,7 @@ class CubeTest {
         }
     }
 
+    // test obracający cztery razy daną ścianką
     void oneSideTestHelper(int i) {
         Cube cube = new Cube(3, (x,y) -> {}, (x, y) -> {}, () -> {}, () -> {});
         Thread t1 = new Thread(new Mover(i, 1, cube)),
@@ -45,12 +44,14 @@ class CubeTest {
         }
     }
 
+    // próbujemy obrotu każdą ścianką
     @Test
     void oneSideTest() {
         for (int i = 0; i < 6; i++)
             oneSideTestHelper(i);
     }
 
+    // test obracający całą kostką
     @Test
     void regripTest() {
         Cube cube = new Cube(3, (x,y) -> {}, (x, y) -> {}, () -> {}, () -> {});
@@ -67,8 +68,12 @@ class CubeTest {
         }
     }
 
+    // test żywotności, sprawdza, czy dwa procesy obracające
+    // różnymi ściankami mogą się wykonać jednocześnie
     @Test
     void singleSafetyTest() {
+        // atomic integer, żeby dało się zwiększać,
+        // w innych testach użyłem wrappera
         AtomicInteger currentSide = new AtomicInteger(-1);
         AtomicInteger inCritSection = new AtomicInteger(0);
         Cube cube = new Cube(3, (x,y) -> {
@@ -95,12 +100,22 @@ class CubeTest {
         }
     }
 
+    // ma zapewnić, że duża część możliwych przeplotów
+    // zostanie rozważona
     @Test
     void multipleSafetyTests() {
         for (int i = 0; i < 50000; i++)
             singleSafetyTest();
     }
 
+    // test żywotności, najpierw tworzy 100 procesów obracających
+    // jedną ścianką, a potem jeden proces obracający drugą
+    // (i nieustannie dalej tworzy inne procesy obracające pierwszą)
+    // kończy się, gdy proces obracający drugą ścianką
+    // wejdzie do sekcji krytycznej
+
+    // ten test może różnie chodzić w zależności od prędkości tworzenia wątków
+    // i ich działania
     @Test
     void livelinessTest() {
         class Tester {
@@ -112,17 +127,20 @@ class CubeTest {
                 (x, y) -> {--test.inCrit; if (x == 2) test.correct = true;}, () -> {}, () -> {});
         Thread t0 = new Thread(new Mover(2, 1, cube));
         boolean t0started = false;
-        int i = 0;
+        int i = 0, counter = 0;
         do {
+            counter++;
             new Thread(new Mover(1, i++, cube)).start();
             i %= 1000;
             if (test.inCrit > 100 && !t0started) {
                 t0started = true;
                 t0.start();
             }
+            // assert counter != 100000 || t0started : "Nowe wątki za wolno się tworzą, żeby test zadziałał";
         } while (!test.correct);
     }
 
+    // test obracania kostką 1x1
     @Test
     void cornerCaseTest() {
         Cube cube = new Cube(1,(x,y) -> {}, (x,y) -> {}, () -> {}, () -> {});
@@ -171,6 +189,7 @@ class CubeTest {
         System.exit(code);
     }
 
+    // test z Validate.java
     @Test
     void validateTest() {
         var counter = new Object() {
@@ -210,6 +229,8 @@ class CubeTest {
         }
     }
 
+    // sprawdza, czy poprawnie obracamy ściankę
+    // przy kręceniu skrajną warstwą
     @Test
     void faceRotateTest() {
         Cube cube = new Cube(3,(x,y) -> {}, (x,y) -> {}, () -> {}, () -> {});

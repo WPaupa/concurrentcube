@@ -136,7 +136,7 @@ public class Cube {
     private void rotateFace(int side, int layer) {
         if (layer == 0)
             rotateClockwise(side);
-        else
+        else if (layer == size - 1)
             rotateCounterclockwise(getOppositeSide(side));
     }
 

@@ -49,8 +49,12 @@ public class Sync {
             mutex.release();
     }
 
-    void end(int axis) throws InterruptedException {
-        mutex.acquire();
+    void end(int axis) {
+        // dostajemy mutexa nieprzerywalnie,
+        // żeby nie musieć się zastanawiać,
+        // czy przerwanie po obrocie sprawia,
+        // że powinniśmy cofnąć obrót
+        mutex.acquireUninterruptibly();
         rotationsRunning--;
         if (rotationsRunning == 0) {
             if (axesWaiting > 0)
