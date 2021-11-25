@@ -2,6 +2,8 @@ import concurrentcube.Cube;
 import org.junit.jupiter.api.Test;
 
 import java.util.Objects;
+import java.util.Random;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
 class CubeTest {
@@ -252,6 +254,41 @@ class CubeTest {
             assert Objects.equals(cube.show(), "000000111115115444222222115033033222444444033553553553");
             cube.rotate(0,2);
             assert Objects.equals(cube.show(), s);
+        } catch (InterruptedException e) {
+            assert false;
+        }
+    }
+
+    @Test
+    void testRepetition() {
+        Cube c = new Cube(3,(x,y)->{},(x,y)->{},()->{},()->{});
+        try {
+            String s = c.show();
+            for (int i = 0; i < 6; i++) {
+                c.rotate(3,0);
+                c.rotate(0,0);
+                c.rotate(1,2);
+                c.rotate(5,2);
+            }
+            assert Objects.equals(c.show(), s);
+        } catch (InterruptedException e) {
+            assert false;
+        }
+    }
+
+    @Test
+    void concurrencyTest() {
+        CountDownLatch l = new CountDownLatch(5);
+        Cube c = new Cube(5,(x,y)->{l.countDown(); try{l.await();}catch(Throwable ignored){}},
+                (x, y)->{},()->{},()->{});
+        new Thread(new Mover(0,0,c)).start();
+        new Thread(new Mover(0,1,c)).start();
+        new Thread(new Mover(0,2,c)).start();
+        new Thread(new Mover(0,3,c)).start();
+        Thread t = new Thread(new Mover(0,4,c));
+        t.start();
+        try {
+            t.join();
         } catch (InterruptedException e) {
             assert false;
         }

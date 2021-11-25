@@ -14,7 +14,9 @@ public class Cube {
     Integer[][][] cube;
     int size;
 
-    // tutaj minimalna magia
+    // tutaj minimalna magia, chcemy,
+    // żeby funkcja każdej osi przypisała
+    // własną liczbę od 0 do 2
     private int sideToAxis(int side) {
         return ((side + 2) % 5) % 3;
     }
