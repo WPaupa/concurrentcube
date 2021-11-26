@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Objects;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 
 class CubeTest {
@@ -16,8 +17,7 @@ class CubeTest {
             try {
                 cube.rotate(side, layer);
             } catch (InterruptedException e) {
-                System.out.println("Interrupted!");
-                assert false;
+                System.out.println(Thread.currentThread() + " interrupted!");
             }
         }
     }
@@ -294,4 +294,46 @@ class CubeTest {
         }
     }
 
+
+    @Test
+    void interruptTest1() {
+        Semaphore s = new Semaphore(0);
+        Cube c = new Cube(3, (x,y) -> {try {s.acquire();} catch (Throwable ignored){}},
+                (x,y) -> {}, () -> {}, () -> {});
+        Thread  t1 = new Thread(new Mover(0,0,c)),
+                t2 = new Thread(new Mover(1,0,c)),
+                t3 = new Thread(new Mover(2,0,c));
+        t1.start();
+        t2.start();
+        t2.interrupt();
+        t3.start();
+        s.release(2);
+        try {
+            t1.join();
+            t3.join();
+        } catch (InterruptedException e) {
+            assert false;
+        }
+    }
+
+    @Test
+    void interruptTest2() {
+        Semaphore s = new Semaphore(0);
+        Cube c = new Cube(3, (x,y) -> {try {s.acquire();} catch (Throwable ignored){}},
+                (x,y) -> {}, () -> {}, () -> {});
+        Thread  t1 = new Thread(new Mover(0,0,c)),
+                t2 = new Thread(new Mover(1,0,c)),
+                t3 = new Thread(new Mover(1,0,c));
+        t1.start();
+        t2.start();
+        t3.start();
+        t2.interrupt();
+        s.release(2);
+        try {
+            t1.join();
+            t3.join();
+        } catch (InterruptedException e) {
+            assert false;
+        }
+    }
 }
