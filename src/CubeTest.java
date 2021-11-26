@@ -238,10 +238,11 @@ class CubeTest {
         Cube cube = new Cube(3,(x,y) -> {}, (x,y) -> {}, () -> {}, () -> {});
         try {
             cube.rotate(2,0);
+            String s = cube.show();
             cube.rotate(0,0);
             assert Objects.equals(cube.show(), "100100100222115115033222222444033033115444444333555555");
             cube.rotate(5,2);
-            String s = cube.show();
+            assert Objects.equals(cube.show(), s);
             cube.rotate(1,0);
             assert Objects.equals(cube.show(), "400400411111111555022022122033033033445445443233255255");
             cube.rotate(3,2);
@@ -334,6 +335,15 @@ class CubeTest {
             t3.join();
         } catch (InterruptedException e) {
             assert false;
+        }
+    }
+
+    @Test
+    void performanceTest() {
+        Cube c = new Cube(2000, (x,y)->{},(x,y)->{},()->{},()->{});
+        for (int i = 0; i < 100000; i++) {
+            new Thread(new Mover(0,0,c)).start();
+            new Thread(new Mover(5,1999,c)).start();
         }
     }
 }

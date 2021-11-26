@@ -12,6 +12,9 @@ public class Cube {
     Runnable beforeShowing, afterShowing;
 
     Integer[][][] cube;
+    int[] rotation;
+    boolean[][] doWeFlip;
+    boolean[][] isRotatingHorizontal;
     int size;
 
     // tutaj minimalna magia, chcemy,
@@ -57,18 +60,23 @@ public class Cube {
         this.beforeRotation = beforeRotation;
         this.afterShowing = afterShowing;
         this.afterRotation = afterRotation;
-    }
-
-    public void rotateClockwise(int side) {
-        for (int i = 0; i < size / 2; i++) {
-            for (int j = i; j < size - i - 1; j++) {
-                int swap = cube[side][i][j];
-                cube[side][i][j] = cube[side][size - 1 - j][i];
-                cube[side][size - 1 - j][i] = cube[side][size - 1 - i][size - 1 - j];
-                cube[side][size - 1 - i][size - 1 - j] = cube[side][j][size - 1 - i];
-                cube[side][j][size - 1 - i] = swap;
+        this.rotation = new int[6];
+        this.doWeFlip = new boolean[6][6];
+        this.isRotatingHorizontal = new boolean[6][6];
+        for (int i = 0; i < 6; i++) {
+            for (int j = 0; j < 6; j++) {
+                this.doWeFlip[i][j] = doWeFlipB(i,j);
+                this.isRotatingHorizontal[i][j] = isRotatingHorizontalB(i,j);
             }
         }
+    }
+
+    public void rotateClockwise(int currentSide) {
+        for (int side = 0; side < 6; side++) {
+            doWeFlip[side][currentSide] = doWeFlip[side][currentSide] != isRotatingHorizontal[side][currentSide];
+            isRotatingHorizontal[side][currentSide] = !isRotatingHorizontal[side][currentSide];
+        }
+        rotation[currentSide] = (rotation[currentSide] + 1) % 4;
     }
 
     public void rotateCounterclockwise(int side) {
@@ -85,7 +93,7 @@ public class Cube {
         IntStream.range(0, size).forEach(x -> cube[side][x][number] = col[x]);
     }
 
-    private boolean doWeFlip(int side, int currentSide) {
+    private boolean doWeFlipB(int side, int currentSide) {
         return switch (side) {
             case 0 -> false;
             case 1 -> currentSide != 4;
@@ -98,10 +106,18 @@ public class Cube {
         };
     }
 
-    boolean isRotatingHorizontal(int side, int currentSide) {
+    private boolean doWeFlip(int side, int currentSide) {
+        return doWeFlip[side][currentSide];
+    }
+
+    boolean isRotatingHorizontalB(int side, int currentSide) {
         if (sideToAxis(side) == 2)
             return true;
         return sideToAxis(currentSide) == 2 && sideToAxis(side) == 1;
+    }
+
+    private boolean isRotatingHorizontal(int side, int currentSide) {
+        return isRotatingHorizontal[side][currentSide];
     }
 
     boolean doWeChangeLayers(int side, int currentSide) {
@@ -174,10 +190,30 @@ public class Cube {
         StringBuilder res = new StringBuilder();
         sync.start(3);
         beforeShowing.run();
-        for (int i = 0; i < 6; i++)
-            for (int j = 0; j < size; j++)
-                for (int k = 0; k < size; k++)
-                    res.append(cube[i][j][k]);
+        for (int i = 0; i < 6; i++) {
+            switch (rotation[i]) {
+                case 0:
+                    for (int j = 0; j < size; j++)
+                        for (int k = 0; k < size; k++)
+                            res.append(cube[i][j][k]);
+                    break;
+                case 1:
+                    for (int k = 0; k < size; k++)
+                        for (int j = size - 1; j >= 0; j--)
+                            res.append(cube[i][j][k]);
+                    break;
+                case 2:
+                    for (int j = size - 1; j >= 0; j--)
+                        for (int k = size - 1; k >= 0; k--)
+                            res.append(cube[i][j][k]);
+                    break;
+                case 3:
+                    for (int k = size - 1; k >= 0; k--)
+                        for (int j = 0; j < size; j++)
+                            res.append(cube[i][j][k]);
+                    break;
+            }
+        }
         afterShowing.run();
         sync.end(3);
         return res.toString();
