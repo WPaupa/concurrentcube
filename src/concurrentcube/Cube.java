@@ -24,6 +24,7 @@ public class Cube {
         return ((side + 2) % 5) % 3;
     }
 
+    // testowane - około tak samo szybkie jak case
     private int getOppositeSide(int side) {
         for (int i = 0; i < 6; i++)
             if (sideToAxis(i) == sideToAxis(side) && i != side)
@@ -31,12 +32,14 @@ public class Cube {
         return -1;
     }
 
-    // totalna magia, najlepiej nie zastanawiać się nad tym, jak działa
     private int nextSide(int anchorSide, int prevSide) {
         return switch (anchorSide) {
+            // wartości wynikające z ponumerowania ścianek kostki
             case 0 -> prevSide == 1 ? 4 : prevSide - 1;
             case 1 -> prevSide == 2 ? 5 : prevSide == 5 ? 4 : (prevSide + 2) % 6;
             case 2 -> prevSide == 0 ? 3 : prevSide == 1 ? 0 : (prevSide + 2) % 6;
+            // obracamy w przeciwną stronę niż gdybyśmy obracali względem przeciwnej ścianki
+            // testowane - jest około tak samo szybkie, jak trzy dodatkowe case'y
             default -> getOppositeSide(nextSide(getOppositeSide(anchorSide), prevSide));
         };
     }
@@ -60,6 +63,7 @@ public class Cube {
         this.rotation = new int[6];
         this.doWeFlip = new boolean[6][6];
         this.isRotatingHorizontal = new boolean[6][6];
+        // wartości wynikające z ponumerowania ścianek kostki
         for (int side = 0; side < 6; side++) {
             for (int currentSide = 0; currentSide < 6; currentSide++) {
                 this.doWeFlip[side][currentSide] = switch (side) {
@@ -80,9 +84,13 @@ public class Cube {
 
     public void rotateClockwise(int currentSide) {
         for (int side = 0; side < 6; side++) {
+            // jeśli mieliśmy poziomy rządek, to obrócenie kostki o 90 stopni zmienia to, czy powinniśmy
+            // go odwrócić (i vice versa)
             doWeFlip[side][currentSide] = doWeFlip[side][currentSide] != isRotatingHorizontal[side][currentSide];
+            // obrócenie ścianki o 90 stopni zmienia poziom na pion
             isRotatingHorizontal[side][currentSide] = !isRotatingHorizontal[side][currentSide];
         }
+        // tablica ułatwiająca wypisywanie
         rotation[currentSide] = (rotation[currentSide] + 1) % 4;
     }
 
@@ -100,16 +108,15 @@ public class Cube {
         IntStream.range(0, size).forEach(x -> cube[side][x][number] = col[x]);
     }
 
+    // w przypadku poziomym: jeśli mamy do czynienia z kostką, którą musimy, odbić,
+    // to musimy odbić także numer warstwy (w przypadku pionowym odwrotnie)
     boolean doWeChangeLayers(int side, int currentSide) {
         return doWeFlip[side][currentSide] == isRotatingHorizontal[side][currentSide];
     }
 
+    // zamienia rządek z kostki na rządek w buforze (i zwraca rządek z kostki)
     private Integer[] exchange(Integer[] to, int side, int currentSide, int layer) {
-        // System.out.println("SIDE " + side + " CURRSIDE " + currentSide + " L" + layer);
         int trueLayer = doWeChangeLayers(side, currentSide) ? size - layer - 1 : layer;
-        // System.out.println("TL"+trueLayer + " FLIP " + doWeFlip(side,currentSide)
-        // + " HORI " + isRotatingHorizontal(side, currentSide) + " CL "
-        //         + doWeChangeLayers(side, currentSide));
         Integer[] buffer;
         if (isRotatingHorizontal[side][currentSide])
             buffer = cube[currentSide][trueLayer];
@@ -124,10 +131,6 @@ public class Cube {
             cube[currentSide][trueLayer] = to;
         else
             setCol(trueLayer, currentSide, to);
-
-        // for (var p : buffer)
-        //     System.out.print(p + " ");
-        // System.out.println();
         return buffer;
     }
 
@@ -139,38 +142,31 @@ public class Cube {
     }
 
     public void rotate(int side, int layer) throws InterruptedException {
-        sync.start(sideToAxis(side));
-
-        int currentSide = side == 5 || side == 0 ? 1 : 0;
         // potrzebujemy uniwersalny numer warstwy do synchronizacji
         int syncLayer = side < getOppositeSide(side) ? layer : size - layer - 1;
 
-        try {
-            sync.startLayer(syncLayer);
-        } catch (InterruptedException e) {
-            sync.end(sideToAxis(side));
-            throw e;
-        }
-        beforeRotation.accept(side, layer);
+        sync.start(sideToAxis(side), layer);
+        beforeRotation.accept(side, syncLayer);
 
+        int currentSide = side == 5 || side == 0 ? 1 : 0;
         // rotacja ścianki przyczepionej do warstwy, o ile taka istnieje
         rotateFace(side, layer);
 
         // rotacja warstwy
         Integer[] buffer = new Integer[size];
+        // pierwsze przejście pętli tylko zabierze kosteczki, a ostatnie tylko je dostarczy
         for (int i = 0; i <= 4; i++) {
             buffer = exchange(buffer, side, currentSide, layer);
             currentSide = nextSide(side, currentSide);
         }
 
         afterRotation.accept(side, layer);
-        sync.endLayer(syncLayer);
-        sync.end(sideToAxis(side));
+        sync.end(sideToAxis(side), syncLayer);
     }
 
     public String show() throws InterruptedException {
         StringBuilder res = new StringBuilder();
-        sync.start(3);
+        sync.startShow();
         beforeShowing.run();
         for (int i = 0; i < 6; i++) {
             switch (rotation[i]) {
@@ -197,12 +193,9 @@ public class Cube {
             }
         }
         afterShowing.run();
-        sync.end(3);
+        sync.endShow();
         return res.toString();
     }
 
-    public int getSize() {
-        return size;
-    }
 }
 

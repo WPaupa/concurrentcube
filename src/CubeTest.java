@@ -76,17 +76,15 @@ class CubeTest {
     // różnymi ściankami mogą się wykonać jednocześnie
     @Test
     void singleSafetyTest() {
-        // atomic integer, żeby dało się zwiększać,
-        // w innych testach użyłem wrappera
         AtomicInteger currentSide = new AtomicInteger(-1);
         AtomicInteger inCritSection = new AtomicInteger(0);
         Cube cube = new Cube(3, (x,y) -> {
-            System.out.println("Starting, side " + x + ", layer " + y);
+            // System.out.println("Starting, side " + x + ", layer " + y);
             assert currentSide.get() == -1 || currentSide.get() == x : currentSide.get() + " " + x;
             inCritSection.incrementAndGet();
             currentSide.set(x);
         }, (x, y) -> {
-            System.out.println("Ending, side " + x + ", layer " + y);
+            // System.out.println("Ending, side " + x + ", layer " + y);
             if (inCritSection.decrementAndGet() == 0)
                 currentSide.set(-1);
         }, () -> {}, () -> {});
@@ -262,6 +260,7 @@ class CubeTest {
         }
     }
 
+    // test na to, czy prosty algorytm zapętli się po sześciu wykonaniach
     @Test
     void testRepetition() {
         Cube c = new Cube(3,(x,y)->{},(x,y)->{},()->{},()->{});
@@ -279,6 +278,7 @@ class CubeTest {
         }
     }
 
+    // testuje to, czy wątki niekolidujące mogą wchodzić razem do sekcji krytycznej
     @Test
     void concurrencyTest() {
         CountDownLatch l = new CountDownLatch(5);
@@ -297,7 +297,7 @@ class CubeTest {
         }
     }
 
-
+    // poniższe testują podstawową obsługę przewań
     @Test
     void interruptTest1() {
         Semaphore s = new Semaphore(0);
@@ -340,6 +340,7 @@ class CubeTest {
         }
     }
 
+    // testuje złożność czasową obracania skrajnej ścianki (działa poniżej pół minuty, jeśli jest O(n))
     @Test
     void performanceTest() {
         Cube c = new Cube(2000, (x,y)->{},(x,y)->{},()->{},()->{});
@@ -350,58 +351,20 @@ class CubeTest {
     }
 
     @Test
-    void TODOusumniesmall() {
-        int cubeSize = 69;
-        int operct = 5000000;
-        Cube cube = new Cube(cubeSize, (x,y)->{}, (x,y)->{}, ()->{}, ()->{});
-        long basic = 2137;
-        long mod = 1000696969;
-        long step = 69;
-        for(int i = 0; i < operct; ++i) {
-            //xd[i] = new Rotator(i < operct / 2 ? 0 : 5, i < operct / 2 ? 0 : cubeSize - 1, cube);
-            //xd[i] = new Rotator((int)(basic % 7), (int)(basic % cubeSize), cube);
-            if(basic % 7 != 6) {
-                try {
-                    cube.rotate((int)basic % 7, (int)basic % cubeSize);
-                } catch (InterruptedException e) {
-                    assert false;
-                }
-            }
-            basic = (basic * basic + step) % mod;
-        }
-
-        try {
-            System.out.println(cube.show());
-        } catch (InterruptedException exc) {
-            assert false;
-        }
-    }
-
-    private Random r = new Random();
-    private AtomicInteger counter = new AtomicInteger(0);
-    private BiConsumer<Integer, Integer> beforeRotation = (Integer x, Integer y) -> counter.incrementAndGet();
-    private BiConsumer<Integer, Integer> afterRotation = (Integer x, Integer y) -> counter.incrementAndGet();
-    private Runnable beforeShow = () -> counter.incrementAndGet();
-    private Runnable afterShow = () -> counter.incrementAndGet();
-
-    @Test
-    void BigComplexConcurrentInterrupted() {
+    void randomInterruptTest() {
         int cubeSize = 51;
         int numberOfThreads = 10000;
         AtomicInteger numberOfInterrupts = new AtomicInteger();
+        AtomicInteger counter = new AtomicInteger(0);
+        Random r = new Random();
 
-        counter.set(0);
-        Cube cube = new Cube(cubeSize, beforeRotation, afterRotation, beforeShow, afterShow);
+        Cube cube = new Cube(cubeSize, (x,y) -> counter.incrementAndGet(), (x,y) -> counter.incrementAndGet(),
+                counter::incrementAndGet, counter::incrementAndGet);
 
         ArrayList<Thread> threads = new ArrayList<>();
-        ArrayList<Integer> sides = new ArrayList<>();
-        ArrayList<Integer> layers = new ArrayList<>();
-        CountDownLatch latch = new CountDownLatch(numberOfThreads);
 
         for(int i = 0; i < numberOfThreads; ++i) {
             int p = r.nextInt(cubeSize), query = r.nextInt(7);
-            sides.add(query);
-            layers.add(p);
             threads.add(new Thread(() -> {
                 try {
                     if (query == 6) {
@@ -412,26 +375,24 @@ class CubeTest {
                     }
                 } catch(Exception exp) {
                     numberOfInterrupts.getAndIncrement();
-                } finally {
-                    latch.countDown();
                 }
             }));
             threads.get(i).start();
 
             if (r.nextBoolean()) {
-                int k = r.nextInt(i + 1);
-                threads.get(k).interrupt();
+                threads.get(r.nextInt(i + 1)).interrupt();
             }
         }
 
         try {
-            latch.await();
+            for (Thread t : threads)
+                t.join();
         }
         catch (Exception exp) {
-            System.out.println("ERROR!");
+            assert false;
         }
 
-        assertEquals((numberOfThreads - numberOfInterrupts.get()) * 2, counter.get());
+        assert (numberOfThreads - numberOfInterrupts.get()) * 2 ==  counter.get();
     }
 
 }
