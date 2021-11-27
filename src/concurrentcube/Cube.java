@@ -145,8 +145,8 @@ public class Cube {
         // potrzebujemy uniwersalny numer warstwy do synchronizacji
         int syncLayer = side < getOppositeSide(side) ? layer : size - layer - 1;
 
-        sync.start(sideToAxis(side), layer);
-        beforeRotation.accept(side, syncLayer);
+        sync.start(sideToAxis(side), syncLayer);
+        beforeRotation.accept(side, layer);
 
         int currentSide = side == 5 || side == 0 ? 1 : 0;
         // rotacja ścianki przyczepionej do warstwy, o ile taka istnieje

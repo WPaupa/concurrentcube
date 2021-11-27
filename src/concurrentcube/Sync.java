@@ -32,8 +32,8 @@ public class Sync {
     private void start(int axis) throws InterruptedException {
         // flaga mówiąca, czy jesteśmy reprezentantem grupy (do obsługi przerwań)
         boolean isRep = false;
-        protection.acquire();
-        mutex.acquire();
+        protection.acquireUninterruptibly();
+        mutex.acquireUninterruptibly();
         // jeśli nikogo nie ma w sekcji krytycznej, to wchodzimy
         if (currentAxis == -1)
             currentAxis = axis;
@@ -75,27 +75,34 @@ public class Sync {
                 interruptMutex.acquireUninterruptibly();
                 // jeśli został już dla nas otwarty semafor,
                 // to możemy po prostu przejść
-                if (waitingAxes.tryAcquire()) {
+                if (isRep && waitingAxes.tryAcquire()) {
                     axesWaiting--;
                     currentAxis = axis;
                 } else if (waitingRotations[axis].tryAcquire()) {
-                    // jeśli mieliśmy zostać nowym reprezentantem, to jednak
+                    // jeśli zostaliśmy wybudzeni dlatego, że mamy zostać nowym reprezentantem, to jednak
                     // nie możemy przejść i musimy posprzątać lub wybudzić nowego reprezentanta
                     if (repsInterrupted[axis] > 0) {
-                        rotationsWaiting[axis]--;
-                        allRotationsWaiting--;
-                        if (rotationsWaiting[axis] == 0) {
-                            axesWaiting--;
+                        // jeśli oprócz tego jeszcze został podniesiony dla nas semafor, to jednak wchodzimy
+                        if (waitingRotations[axis].tryAcquire()) {
                             repsInterrupted[axis]--;
-                            mutex.release();
-                            // nie oddajemy protection,
-                            // bo dostaliśmy tylko mutexa
+                            axesWaiting--;
+                            currentAxis = axis;
                         } else {
-                            waitingRotations[axis].release();
-                            // odziedziczyliśmy tylko mutexa, przekazujemy dalej tylko mutexa
+                            rotationsWaiting[axis]--;
+                            allRotationsWaiting--;
+                            if (rotationsWaiting[axis] == 0) {
+                                axesWaiting--;
+                                repsInterrupted[axis]--;
+                                mutex.release();
+                                // nie oddajemy protection,
+                                // bo dostaliśmy tylko mutexa
+                            } else {
+                                waitingRotations[axis].release();
+                                // odziedziczyliśmy tylko mutexa, przekazujemy dalej tylko mutexa
+                            }
+                            interruptMutex.release();
+                            throw e;
                         }
-                        interruptMutex.release();
-                        throw e;
                     }
                 } else {
                     // bierzemy tylko mutexa, a nie protection, żeby można było nam go oddać
@@ -170,7 +177,7 @@ public class Sync {
         interruptMutex.release();
     }
 
-    Semaphore[] waitingForLayers;
+    private final Semaphore[] waitingForLayers;
 
     private void startLayer(int layer) throws InterruptedException {
         waitingForLayers[layer].acquire();
