@@ -411,7 +411,6 @@ class CubeTest {
                         cube.rotate(query, p);
                     }
                 } catch(Exception exp) {
-                    //System.out.println("int" + query + "l" + p);
                     numberOfInterrupts.getAndIncrement();
                 } finally {
                     latch.countDown();
@@ -421,28 +420,8 @@ class CubeTest {
 
             if (r.nextBoolean()) {
                 int k = r.nextInt(i + 1);
-                //System.out.println(sides.get(k) + "l" + layers.get(k) + "i");
                 threads.get(k).interrupt();
             }
-        }
-        if (cube.sync.mutex.getQueueLength() >= 0) {
-            try {
-                Thread.sleep(5000);
-            } catch (Throwable ignored) {
-            }
-            System.out.println(cube.sync.allRotationsWaiting);
-            System.out.println(cube.sync.axesWaiting);
-            System.out.println(cube.sync.currentAxis);
-            System.out.println(cube.sync.rotationsRunning);
-            System.out.println(Arrays.toString(cube.sync.repsInterrupted));
-            System.out.println(Arrays.toString(cube.sync.rotationsWaiting));
-            System.out.println(cube.sync.mutex.availablePermits() + "w" + cube.sync.mutex.getQueueLength());
-            System.out.println(cube.sync.interruptMutex.availablePermits() + "w" + cube.sync.interruptMutex.getQueueLength());
-            System.out.println(cube.sync.waitingAxes.availablePermits() + "w" + cube.sync.waitingAxes.getQueueLength());
-            System.out.println(cube.sync.waitingRotations[0].availablePermits() + "w" + cube.sync.waitingRotations[0].getQueueLength());
-            System.out.println(cube.sync.waitingRotations[1].availablePermits() + "w" + cube.sync.waitingRotations[1].getQueueLength());
-            System.out.println(cube.sync.waitingRotations[2].availablePermits() + "w" + cube.sync.waitingRotations[2].getQueueLength());
-            System.out.println(cube.sync.waitingRotations[3].availablePermits() + "w" + cube.sync.waitingRotations[3].getQueueLength());
         }
 
         try {

@@ -1,12 +1,11 @@
 package concurrentcube;
 
-import java.util.Arrays;
 import java.util.concurrent.Semaphore;
 
 public class Sync {
-    public final Semaphore mutex;
-    public final Semaphore[] waitingRotations;
-    public final Semaphore waitingAxes;
+    private final Semaphore mutex;
+    private final Semaphore[] waitingRotations;
+    private final Semaphore waitingAxes;
     // Ten semafor służy do obsługi przerwań w wypadku,
     // gdy wątek przerwany nie zdąży po sobie posprzątać
     // zanim jakiś inny wątek wykona protokół końcowy.
@@ -14,15 +13,15 @@ public class Sync {
     // względem protokołu końcowego i budzenia kaskadowego,
     // żeby nie można było otworzyć przerwanemu procesowi
     // semafora w trakcie, gdy on obsługuje przerwanie.
-    public final Semaphore interruptMutex;
-    public final Semaphore protection;
+    private final Semaphore interruptMutex;
+    private final Semaphore protection;
 
-    public final int[] rotationsWaiting;
-    public final int[] repsInterrupted;
-    public int currentAxis = -1;
-    public int rotationsRunning;
-    public int axesWaiting;
-    public int allRotationsWaiting;
+    private final int[] rotationsWaiting;
+    private final int[] repsInterrupted;
+    private int currentAxis = -1;
+    private int rotationsRunning;
+    private int axesWaiting;
+    private int allRotationsWaiting;
 
     void start(int axis) throws InterruptedException {
         boolean isRep = false;
@@ -50,7 +49,8 @@ public class Sync {
                         repsInterrupted[axis]--;
                         isRep = true;
                         mutex.release();
-                        protection.release();
+                        // nie oddajemy protection,
+                        // bo dostaliśmy tylko mutexa
                         waitingAxes.acquire();
                         axesWaiting--;
                         currentAxis = axis;
@@ -75,7 +75,8 @@ public class Sync {
                             axesWaiting--;
                             repsInterrupted[axis]--;
                             mutex.release();
-                            protection.release();
+                            // nie oddajemy protection,
+                            // bo dostaliśmy tylko mutexa
                         } else {
                             waitingRotations[axis].release();
                         }
@@ -123,8 +124,8 @@ public class Sync {
         // żeby nie musieć się zastanawiać,
         // czy przerwanie po obrocie sprawia,
         // że powinniśmy cofnąć obrót
-        interruptMutex.acquireUninterruptibly();
         protection.acquireUninterruptibly();
+        interruptMutex.acquireUninterruptibly();
         mutex.acquireUninterruptibly();
         rotationsRunning--;
         if (rotationsRunning == 0) {

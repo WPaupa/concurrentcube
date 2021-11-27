@@ -7,7 +7,7 @@ import java.util.stream.IntStream;
 
 public class Cube {
 
-    public Sync sync;
+    private final Sync sync;
     private final BiConsumer<Integer, Integer> beforeRotation, afterRotation;
     private final Runnable beforeShowing, afterShowing;
 
