@@ -15,6 +15,7 @@ public class Sync {
     // żeby nie można było otworzyć przerwanemu procesowi
     // semafora w trakcie, gdy on obsługuje przerwanie.
     public final Semaphore interruptMutex;
+    public final Semaphore protection;
 
     public final int[] rotationsWaiting;
     public final int[] repsInterrupted;
@@ -25,6 +26,7 @@ public class Sync {
 
     void start(int axis) throws InterruptedException {
         boolean isRep = false;
+        protection.acquire();
         mutex.acquire();
         if (currentAxis == -1)
             currentAxis = axis;
@@ -36,16 +38,19 @@ public class Sync {
                     axesWaiting++;
                     isRep = true;
                     mutex.release();
+                    protection.release();
                     waitingAxes.acquire();
                     axesWaiting--;
                     currentAxis = axis;
                 } else {
                     mutex.release();
+                    protection.release();
                     waitingRotations[axis].acquire();
                     if (repsInterrupted[axis] > 0) {
                         repsInterrupted[axis]--;
                         isRep = true;
                         mutex.release();
+                        protection.release();
                         waitingAxes.acquire();
                         axesWaiting--;
                         currentAxis = axis;
@@ -70,6 +75,7 @@ public class Sync {
                             axesWaiting--;
                             repsInterrupted[axis]--;
                             mutex.release();
+                            protection.release();
                         } else {
                             waitingRotations[axis].release();
                         }
@@ -105,8 +111,10 @@ public class Sync {
         mutex.acquireUninterruptibly();
         if (rotationsWaiting[axis] > 0)
             waitingRotations[axis].release();
-        else
+        else {
             mutex.release();
+            protection.release();
+        }
         interruptMutex.release();
     }
 
@@ -116,6 +124,7 @@ public class Sync {
         // czy przerwanie po obrocie sprawia,
         // że powinniśmy cofnąć obrót
         interruptMutex.acquireUninterruptibly();
+        protection.acquireUninterruptibly();
         mutex.acquireUninterruptibly();
         rotationsRunning--;
         if (rotationsRunning == 0) {
@@ -124,9 +133,12 @@ public class Sync {
             else {
                 currentAxis = -1;
                 mutex.release();
+                protection.release();
             }
-        } else
+        } else {
             mutex.release();
+            protection.release();
+        }
         interruptMutex.release();
     }
 
@@ -143,6 +155,7 @@ public class Sync {
     public Sync(int size) {
         mutex = new Semaphore(1);
         interruptMutex = new Semaphore(1);
+        protection = new Semaphore(1);
         waitingAxes = new Semaphore(0);
         waitingRotations = new Semaphore[4];
         repsInterrupted = new int[4];
