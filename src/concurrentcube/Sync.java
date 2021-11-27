@@ -1,11 +1,12 @@
 package concurrentcube;
 
+import java.util.Arrays;
 import java.util.concurrent.Semaphore;
 
 public class Sync {
-    private final Semaphore mutex;
-    private final Semaphore[] waitingRotations;
-    private final Semaphore waitingAxes;
+    public final Semaphore mutex;
+    public final Semaphore[] waitingRotations;
+    public final Semaphore waitingAxes;
     // Ten semafor służy do obsługi przerwań w wypadku,
     // gdy wątek przerwany nie zdąży po sobie posprzątać
     // zanim jakiś inny wątek wykona protokół końcowy.
@@ -13,15 +14,17 @@ public class Sync {
     // względem protokołu końcowego i budzenia kaskadowego,
     // żeby nie można było otworzyć przerwanemu procesowi
     // semafora w trakcie, gdy on obsługuje przerwanie.
-    private final Semaphore interruptMutex;
+    public final Semaphore interruptMutex;
 
-    private final int[] rotationsWaiting;
-    private int currentAxis = -1;
-    private int rotationsRunning;
-    private int axesWaiting;
-    private int allRotationsWaiting;
+    public final int[] rotationsWaiting;
+    public final int[] repsInterrupted;
+    public int currentAxis = -1;
+    public int rotationsRunning;
+    public int axesWaiting;
+    public int allRotationsWaiting;
 
     void start(int axis) throws InterruptedException {
+        boolean isRep = false;
         mutex.acquire();
         if (currentAxis == -1)
             currentAxis = axis;
@@ -31,6 +34,7 @@ public class Sync {
             try {
                 if (rotationsWaiting[axis] == 1) {
                     axesWaiting++;
+                    isRep = true;
                     mutex.release();
                     waitingAxes.acquire();
                     axesWaiting--;
@@ -38,6 +42,14 @@ public class Sync {
                 } else {
                     mutex.release();
                     waitingRotations[axis].acquire();
+                    if (repsInterrupted[axis] > 0) {
+                        repsInterrupted[axis]--;
+                        isRep = true;
+                        mutex.release();
+                        waitingAxes.acquire();
+                        axesWaiting--;
+                        currentAxis = axis;
+                    }
                 }
             } catch (InterruptedException e) {
                 interruptMutex.acquireUninterruptibly();
@@ -47,18 +59,39 @@ public class Sync {
                 if (waitingAxes.tryAcquire()) {
                     axesWaiting--;
                     currentAxis = axis;
-                    mutex.release();
                 } else if (waitingRotations[axis].tryAcquire()) {
-                    mutex.release();
-                } else {
-                    // w przeciwnym wypadku
+                    // w przeciwnym wypadku lub gdy mieliśmy zostać
+                    // nowym reprezentantem, to
                     // musimy po sobie posprzątać i zgłosić przerwanie
+                    if (repsInterrupted[axis] > 0) {
+                        rotationsWaiting[axis]--;
+                        allRotationsWaiting--;
+                        if (rotationsWaiting[axis] == 0) {
+                            axesWaiting--;
+                            repsInterrupted[axis]--;
+                            mutex.release();
+                        } else {
+                            waitingRotations[axis].release();
+                        }
+                        interruptMutex.release();
+                        throw e;
+                    }
+                } else {
                     mutex.acquireUninterruptibly();
                     rotationsWaiting[axis]--;
-                    if (rotationsWaiting[axis] == 0)
+                    allRotationsWaiting--;
+                    if (rotationsWaiting[axis] == 0) {
                         axesWaiting--;
+                        mutex.release();
+                    }
+                    // jeśli byliśmy reprezentantem,
+                    // to musimy wyznaczyć nowego reprezentanta
+                    else if (isRep) {
+                        repsInterrupted[axis]++;
+                        waitingRotations[axis].release();
+                    } else
+                        mutex.release();
                     interruptMutex.release();
-                    mutex.release();
                     throw e;
                 }
                 interruptMutex.release();
@@ -67,7 +100,9 @@ public class Sync {
             allRotationsWaiting--;
         }
         rotationsRunning++;
+        mutex.release();
         interruptMutex.acquireUninterruptibly();
+        mutex.acquireUninterruptibly();
         if (rotationsWaiting[axis] > 0)
             waitingRotations[axis].release();
         else
@@ -80,8 +115,8 @@ public class Sync {
         // żeby nie musieć się zastanawiać,
         // czy przerwanie po obrocie sprawia,
         // że powinniśmy cofnąć obrót
-        mutex.acquireUninterruptibly();
         interruptMutex.acquireUninterruptibly();
+        mutex.acquireUninterruptibly();
         rotationsRunning--;
         if (rotationsRunning == 0) {
             if (axesWaiting > 0)
@@ -110,6 +145,7 @@ public class Sync {
         interruptMutex = new Semaphore(1);
         waitingAxes = new Semaphore(0);
         waitingRotations = new Semaphore[4];
+        repsInterrupted = new int[4];
         for (int i = 0; i < 4; i++)
             waitingRotations[i] = new Semaphore(0);
         rotationsWaiting = new int[4];

@@ -7,15 +7,15 @@ import java.util.stream.IntStream;
 
 public class Cube {
 
-    Sync sync;
-    BiConsumer<Integer, Integer> beforeRotation, afterRotation;
-    Runnable beforeShowing, afterShowing;
+    public Sync sync;
+    private final BiConsumer<Integer, Integer> beforeRotation, afterRotation;
+    private final Runnable beforeShowing, afterShowing;
 
-    Integer[][][] cube;
-    int[] rotation;
-    boolean[][] doWeFlip;
-    boolean[][] isRotatingHorizontal;
-    int size;
+    private final Integer[][][] cube;
+    private final int[] rotation;
+    private final boolean[][] doWeFlip;
+    private final boolean[][] isRotatingHorizontal;
+    private final int size;
 
     // tutaj minimalna magia, chcemy,
     // żeby funkcja każdej osi przypisała
@@ -24,23 +24,21 @@ public class Cube {
         return ((side + 2) % 5) % 3;
     }
 
-    // totalna magia, najlepiej nie zastanawiać się nad tym, jak działa
-    private int nextSide(int anchorSide, int prevSide) {
-        return switch (anchorSide) {
-            case 0 -> prevSide == 1 ? 4 : prevSide - 1;
-            case 1 -> (5 * (prevSide % 3) + 2) % 7 - (prevSide % 2);
-            case 2 -> ((8 * prevSide + 3) % 42) % 11;
-            case 3 -> ((prevSide % 3) + 4) % 6 + 2 * (prevSide % 2);
-            case 4 -> ((4 * prevSide + 1) % 18) % 13;
-            default -> (prevSide % 4) + 1;
-        };
-    }
-
     private int getOppositeSide(int side) {
         for (int i = 0; i < 6; i++)
             if (sideToAxis(i) == sideToAxis(side) && i != side)
                 return i;
         return -1;
+    }
+
+    // totalna magia, najlepiej nie zastanawiać się nad tym, jak działa
+    private int nextSide(int anchorSide, int prevSide) {
+        return switch (anchorSide) {
+            case 0 -> prevSide == 1 ? 4 : prevSide - 1;
+            case 1 -> prevSide == 2 ? 5 : prevSide == 5 ? 4 : (prevSide + 2) % 6;
+            case 2 -> prevSide == 0 ? 3 : prevSide == 1 ? 0 : (prevSide + 2) % 6;
+            default -> getOppositeSide(nextSide(getOppositeSide(anchorSide), prevSide));
+        };
     }
 
     public Cube(int size,
@@ -55,7 +53,6 @@ public class Cube {
                 for (int k = 0; k < size; k++)
                     cube[i][j][k] = i;
         this.size = size;
-
         this.beforeShowing = beforeShowing;
         this.beforeRotation = beforeRotation;
         this.afterShowing = afterShowing;
@@ -63,10 +60,20 @@ public class Cube {
         this.rotation = new int[6];
         this.doWeFlip = new boolean[6][6];
         this.isRotatingHorizontal = new boolean[6][6];
-        for (int i = 0; i < 6; i++) {
-            for (int j = 0; j < 6; j++) {
-                this.doWeFlip[i][j] = doWeFlipB(i,j);
-                this.isRotatingHorizontal[i][j] = isRotatingHorizontalB(i,j);
+        for (int side = 0; side < 6; side++) {
+            for (int currentSide = 0; currentSide < 6; currentSide++) {
+                this.doWeFlip[side][currentSide] = switch (side) {
+                    case 0 -> false;
+                    case 1 -> currentSide != 4;
+                    case 3 -> currentSide == 4;
+                    case 2 -> currentSide != 1 &&
+                            currentSide != 5;
+                    case 4 -> currentSide == 1 ||
+                            currentSide == 5;
+                    default -> true;
+                };
+                this.isRotatingHorizontal[side][currentSide] =
+                        (sideToAxis(side) == 2) || (sideToAxis(currentSide) == 2 && sideToAxis(side) == 1);
             }
         }
     }
@@ -93,35 +100,8 @@ public class Cube {
         IntStream.range(0, size).forEach(x -> cube[side][x][number] = col[x]);
     }
 
-    private boolean doWeFlipB(int side, int currentSide) {
-        return switch (side) {
-            case 0 -> false;
-            case 1 -> currentSide != 4;
-            case 3 -> currentSide == 4;
-            case 2 -> currentSide != 1 &&
-                    currentSide != 5;
-            case 4 -> currentSide == 1 ||
-                    currentSide == 5;
-            default -> true;
-        };
-    }
-
-    private boolean doWeFlip(int side, int currentSide) {
-        return doWeFlip[side][currentSide];
-    }
-
-    boolean isRotatingHorizontalB(int side, int currentSide) {
-        if (sideToAxis(side) == 2)
-            return true;
-        return sideToAxis(currentSide) == 2 && sideToAxis(side) == 1;
-    }
-
-    private boolean isRotatingHorizontal(int side, int currentSide) {
-        return isRotatingHorizontal[side][currentSide];
-    }
-
     boolean doWeChangeLayers(int side, int currentSide) {
-        return doWeFlip(side, currentSide) == isRotatingHorizontal(side, currentSide);
+        return doWeFlip[side][currentSide] == isRotatingHorizontal[side][currentSide];
     }
 
     private Integer[] exchange(Integer[] to, int side, int currentSide, int layer) {
@@ -131,16 +111,16 @@ public class Cube {
         // + " HORI " + isRotatingHorizontal(side, currentSide) + " CL "
         //         + doWeChangeLayers(side, currentSide));
         Integer[] buffer;
-        if (isRotatingHorizontal(side, currentSide))
+        if (isRotatingHorizontal[side][currentSide])
             buffer = cube[currentSide][trueLayer];
         else
             buffer = col(trueLayer, currentSide);
 
-        if (doWeFlip(side, currentSide)) {
+        if (doWeFlip[side][currentSide]) {
             Collections.reverse(Arrays.asList(buffer));
             Collections.reverse(Arrays.asList(to));
         }
-        if (isRotatingHorizontal(side, currentSide))
+        if (isRotatingHorizontal[side][currentSide])
             cube[currentSide][trueLayer] = to;
         else
             setCol(trueLayer, currentSide, to);
@@ -162,13 +142,15 @@ public class Cube {
         sync.start(sideToAxis(side));
 
         int currentSide = side == 5 || side == 0 ? 1 : 0;
-        // layer to numer warsty względem ścianki, którą obracamy
-        // potrzebujemy wyłuskać numer warstwy odpowiadający numerowi wiersza/kolumny
-        int trueLayer = doWeChangeLayers(side, currentSide) ? size - layer - 1 : layer;
-        // oraz uniwersalny numer warstwy potrzebny do synchronizacji
+        // potrzebujemy uniwersalny numer warstwy do synchronizacji
         int syncLayer = side < getOppositeSide(side) ? layer : size - layer - 1;
 
-        sync.startLayer(syncLayer);
+        try {
+            sync.startLayer(syncLayer);
+        } catch (InterruptedException e) {
+            sync.end(sideToAxis(side));
+            throw e;
+        }
         beforeRotation.accept(side, layer);
 
         // rotacja ścianki przyczepionej do warstwy, o ile taka istnieje
@@ -219,5 +201,8 @@ public class Cube {
         return res.toString();
     }
 
+    public int getSize() {
+        return size;
+    }
 }
 
