@@ -5,14 +5,21 @@ import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiConsumer;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class CubeTest {
 
 
-    private record Mover(int side, int layer, Cube cube) implements Runnable {
+    private static class Mover implements Runnable {
+
+        private final int side;
+        private final int layer;
+        private final Cube cube;
+
+        public Mover(int side, int layer, Cube cube) {
+            this.cube = cube;
+            this.layer = layer;
+            this.side = side;
+        }
 
         @Override
         public void run() {
@@ -385,6 +392,23 @@ class CubeTest {
         }
 
         try {
+            /*
+            Thread.sleep(1000);
+            System.out.println(cube.sync.allRotationsWaiting);
+            System.out.println(cube.sync.axesWaiting);
+            System.out.println(cube.sync.currentAxis);
+            System.out.println(cube.sync.rotationsRunning);
+            System.out.println(Arrays.toString(cube.sync.rotationsWaiting));
+            System.out.println(Arrays.toString(cube.sync.repsInterrupted));
+            System.out.println(cube.sync.mutex.availablePermits() + "w" + cube.sync.mutex.getQueueLength());
+            System.out.println(cube.sync.interruptMutex.availablePermits() + "w" + cube.sync.interruptMutex.getQueueLength());
+            System.out.println(cube.sync.protection.availablePermits() + "w" + cube.sync.protection.getQueueLength());
+            System.out.println(cube.sync.waitingAxes.availablePermits() + "w" + cube.sync.waitingAxes.getQueueLength());
+            System.out.println(cube.sync.waitingRotations[0].availablePermits() + "w" + cube.sync.waitingRotations[0].getQueueLength());
+            System.out.println(cube.sync.waitingRotations[1].availablePermits() + "w" + cube.sync.waitingRotations[1].getQueueLength());
+            System.out.println(cube.sync.waitingRotations[2].availablePermits() + "w" + cube.sync.waitingRotations[2].getQueueLength());
+            System.out.println(cube.sync.waitingRotations[3].availablePermits() + "w" + cube.sync.waitingRotations[3].getQueueLength());
+            //*/
             for (Thread t : threads)
                 t.join();
         }
@@ -393,6 +417,14 @@ class CubeTest {
         }
 
         assert (numberOfThreads - numberOfInterrupts.get()) * 2 ==  counter.get();
+    }
+
+    @Test
+    void testInt() {
+        for (int i = 0; i < 1000; i++) {
+            System.out.println("=============");
+            randomInterruptTest();
+        }
     }
 
 }

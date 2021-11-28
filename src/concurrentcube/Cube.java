@@ -33,15 +33,19 @@ public class Cube {
     }
 
     private int nextSide(int anchorSide, int prevSide) {
-        return switch (anchorSide) {
-            // wartości wynikające z ponumerowania ścianek kostki
-            case 0 -> prevSide == 1 ? 4 : prevSide - 1;
-            case 1 -> prevSide == 2 ? 5 : prevSide == 5 ? 4 : (prevSide + 2) % 6;
-            case 2 -> prevSide == 0 ? 3 : prevSide == 1 ? 0 : (prevSide + 2) % 6;
-            // obracamy w przeciwną stronę niż gdybyśmy obracali względem przeciwnej ścianki
-            // testowane - jest około tak samo szybkie, jak trzy dodatkowe case'y
-            default -> getOppositeSide(nextSide(getOppositeSide(anchorSide), prevSide));
-        };
+        // wartości wynikające z ponumerowania ścianek kostki
+        switch (anchorSide) {
+            case 0:
+                return prevSide == 1 ? 4 : prevSide - 1;
+            case 1:
+                return prevSide == 2 ? 5 : prevSide == 5 ? 4 : (prevSide + 2) % 6;
+            case 2:
+                return prevSide == 0 ? 3 : prevSide == 1 ? 0 : (prevSide + 2) % 6;
+            default:
+                // obracamy w przeciwną stronę niż gdybyśmy obracali względem przeciwnej ścianki
+                // testowane - jest około tak samo szybkie, jak trzy dodatkowe case'y
+                return getOppositeSide(nextSide(getOppositeSide(anchorSide), prevSide));
+        }
     }
 
     public Cube(int size,
@@ -66,16 +70,27 @@ public class Cube {
         // wartości wynikające z ponumerowania ścianek kostki
         for (int side = 0; side < 6; side++) {
             for (int currentSide = 0; currentSide < 6; currentSide++) {
-                this.doWeFlip[side][currentSide] = switch (side) {
-                    case 0 -> false;
-                    case 1 -> currentSide != 4;
-                    case 3 -> currentSide == 4;
-                    case 2 -> currentSide != 1 &&
+                switch (side) {
+                    case 0:
+                        this.doWeFlip[side][currentSide] = false;
+                        break;
+                    case 1:
+                        this.doWeFlip[side][currentSide] = currentSide != 4;
+                        break;
+                    case 3:
+                        this.doWeFlip[side][currentSide] = currentSide == 4;
+                        break;
+                    case 2:
+                        this.doWeFlip[side][currentSide] = currentSide != 1 &&
                             currentSide != 5;
-                    case 4 -> currentSide == 1 ||
+                        break;
+                    case 4:
+                        this.doWeFlip[side][currentSide] = currentSide == 1 ||
                             currentSide == 5;
-                    default -> true;
-                };
+                        break;
+                    default:
+                        this.doWeFlip[side][currentSide] = true;
+                }
                 this.isRotatingHorizontal[side][currentSide] =
                         (sideToAxis(side) == 2) || (sideToAxis(currentSide) == 2 && sideToAxis(side) == 1);
             }
