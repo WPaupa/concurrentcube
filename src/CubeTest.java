@@ -1,5 +1,8 @@
 import concurrentcube.Cube;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
@@ -32,7 +35,9 @@ class CubeTest {
     }
 
     // test obracający cztery razy daną ścianką
-    void oneSideTestHelper(int i) {
+    @ParameterizedTest
+    @ValueSource(ints = {0,1,2,3,4,5})
+    void oneSideTest(int i) {
         Cube cube = new Cube(3, (x,y) -> {}, (x, y) -> {}, () -> {}, () -> {});
         Thread t1 = new Thread(new Mover(i, 1, cube)),
                t2 = new Thread(new Mover(i, 1, cube)),
@@ -55,13 +60,6 @@ class CubeTest {
         }
     }
 
-    // próbujemy obrotu każdą ścianką
-    @Test
-    void oneSideTest() {
-        for (int i = 0; i < 6; i++)
-            oneSideTestHelper(i);
-    }
-
     // test obracający całą kostką
     @Test
     void regripTest() {
@@ -81,19 +79,24 @@ class CubeTest {
 
     // test żywotności, sprawdza, czy dwa procesy obracające
     // różnymi ściankami mogą się wykonać jednocześnie
-    @Test
-    void singleSafetyTest() {
+    @RepeatedTest(50000)
+    void safetyTest() {
         AtomicInteger currentSide = new AtomicInteger(-1);
         AtomicInteger inCritSection = new AtomicInteger(0);
+        Semaphore mutex = new Semaphore(1);
         Cube cube = new Cube(3, (x,y) -> {
             // System.out.println("Starting, side " + x + ", layer " + y);
+            mutex.acquireUninterruptibly();
             assert currentSide.get() == -1 || currentSide.get() == x : currentSide.get() + " " + x;
             inCritSection.incrementAndGet();
             currentSide.set(x);
+            mutex.release();
         }, (x, y) -> {
+            mutex.acquireUninterruptibly();
             // System.out.println("Ending, side " + x + ", layer " + y);
             if (inCritSection.decrementAndGet() == 0)
                 currentSide.set(-1);
+            mutex.release();
         }, () -> {}, () -> {});
         Thread  t1 = new Thread(new Mover(1, 0, cube)),
                 t2 = new Thread(new Mover(1, 1, cube)),
@@ -102,19 +105,11 @@ class CubeTest {
         try {
             t1.start(); t2.start(); t4.start(); t3.start();
             t1.join(); t2.join(); t4.join(); t3.join();
-            System.out.println(cube.show());
+            // System.out.println(cube.show());
         } catch (InterruptedException e) {
             System.out.println("Interrupted!");
             assert false;
         }
-    }
-
-    // ma zapewnić, że duża część możliwych przeplotów
-    // zostanie rozważona
-    @Test
-    void multipleSafetyTests() {
-        for (int i = 0; i < 50000; i++)
-            singleSafetyTest();
     }
 
     // test żywotności, najpierw tworzy 100 procesów obracających
@@ -308,7 +303,7 @@ class CubeTest {
     @Test
     void interruptTest1() {
         Semaphore s = new Semaphore(0);
-        Cube c = new Cube(3, (x,y) -> {try {s.acquire();} catch (Throwable ignored){}},
+        Cube c = new Cube(3, (x,y) -> s.acquireUninterruptibly(),
                 (x,y) -> {}, () -> {}, () -> {});
         Thread  t1 = new Thread(new Mover(0,0,c)),
                 t2 = new Thread(new Mover(1,0,c)),
@@ -329,7 +324,7 @@ class CubeTest {
     @Test
     void interruptTest2() {
         Semaphore s = new Semaphore(0);
-        Cube c = new Cube(3, (x,y) -> {try {s.acquire();} catch (Throwable ignored){}},
+        Cube c = new Cube(3, (x,y) -> s.acquireUninterruptibly(),
                 (x,y) -> {}, () -> {}, () -> {});
         Thread  t1 = new Thread(new Mover(0,0,c)),
                 t2 = new Thread(new Mover(1,0,c)),
@@ -354,76 +349,6 @@ class CubeTest {
         for (int i = 0; i < 100000; i++) {
             new Thread(new Mover(0,0,c)).start();
             new Thread(new Mover(5,1999,c)).start();
-        }
-    }
-
-    @Test
-    void randomInterruptTest() {
-        int cubeSize = 51;
-        int numberOfThreads = 10000;
-        AtomicInteger numberOfInterrupts = new AtomicInteger();
-        AtomicInteger counter = new AtomicInteger(0);
-        Random r = new Random();
-
-        Cube cube = new Cube(cubeSize, (x,y) -> counter.incrementAndGet(), (x,y) -> counter.incrementAndGet(),
-                counter::incrementAndGet, counter::incrementAndGet);
-
-        ArrayList<Thread> threads = new ArrayList<>();
-
-        for(int i = 0; i < numberOfThreads; ++i) {
-            int p = r.nextInt(cubeSize), query = r.nextInt(7);
-            threads.add(new Thread(() -> {
-                try {
-                    if (query == 6) {
-                        cube.show();
-                    }
-                    else {
-                        cube.rotate(query, p);
-                    }
-                } catch(Exception exp) {
-                    numberOfInterrupts.getAndIncrement();
-                }
-            }));
-            threads.get(i).start();
-
-            if (r.nextBoolean()) {
-                threads.get(r.nextInt(i + 1)).interrupt();
-            }
-        }
-
-        try {
-            /*
-            Thread.sleep(1000);
-            System.out.println(cube.sync.allRotationsWaiting);
-            System.out.println(cube.sync.axesWaiting);
-            System.out.println(cube.sync.currentAxis);
-            System.out.println(cube.sync.rotationsRunning);
-            System.out.println(Arrays.toString(cube.sync.rotationsWaiting));
-            System.out.println(cube.sync.repInterrupted);
-            System.out.println(cube.sync.mutex.availablePermits() + "w" + cube.sync.mutex.getQueueLength());
-            System.out.println(cube.sync.interruptMutex.availablePermits() + "w" + cube.sync.interruptMutex.getQueueLength());
-            System.out.println(cube.sync.protection.availablePermits() + "w" + cube.sync.protection.getQueueLength());
-            System.out.println(cube.sync.waitingAxes.availablePermits() + "w" + cube.sync.waitingAxes.getQueueLength());
-            System.out.println(cube.sync.waitingRotations[0].availablePermits() + "w" + cube.sync.waitingRotations[0].getQueueLength());
-            System.out.println(cube.sync.waitingRotations[1].availablePermits() + "w" + cube.sync.waitingRotations[1].getQueueLength());
-            System.out.println(cube.sync.waitingRotations[2].availablePermits() + "w" + cube.sync.waitingRotations[2].getQueueLength());
-            System.out.println(cube.sync.waitingRotations[3].availablePermits() + "w" + cube.sync.waitingRotations[3].getQueueLength());
-            //*/
-            for (Thread t : threads)
-                t.join();
-        }
-        catch (Exception exp) {
-            assert false;
-        }
-
-        assert (numberOfThreads - numberOfInterrupts.get()) * 2 ==  counter.get();
-    }
-
-    @Test
-    void testInt() {
-        for (int i = 0; i < 1000; i++) {
-            System.out.println(i + "===========================");
-            randomInterruptTest();
         }
     }
 
