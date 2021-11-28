@@ -11,7 +11,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 class CubeTest {
 
-
     private static class Mover implements Runnable {
 
         private final int side;
@@ -77,7 +76,7 @@ class CubeTest {
         }
     }
 
-    // test żywotności, sprawdza, czy dwa procesy obracające
+    // test bezpieczeństwa, sprawdza, czy dwa procesy obracające
     // różnymi ściankami mogą się wykonać jednocześnie
     @RepeatedTest(50000)
     void safetyTest() {
@@ -312,6 +311,10 @@ class CubeTest {
         t2.start();
         t2.interrupt();
         t3.start();
+        // musimy poczekać, aż t2 przetworzy interrupta,
+        // żeby przypadkiem nie wpuścić go do sekcji krytycznej
+        // (wejdzie, jeśli interrupt przyjdzie po zwolnieniu dla niego semafora)
+        try {Thread.sleep(100);} catch (InterruptedException ignored) {}
         s.release(2);
         try {
             t1.join();
@@ -333,20 +336,15 @@ class CubeTest {
         t2.start();
         t3.start();
         t2.interrupt();
+        try {Thread.sleep(100);} catch (InterruptedException ignored) {}
         s.release(2);
-        try {
-            t1.join();
-            t3.join();
-        } catch (InterruptedException e) {
-            assert false;
-        }
     }
 
-    // testuje złożność czasową obracania skrajnej ścianki (działa poniżej pół minuty, jeśli jest O(n))
+    // testuje złożność czasową obracania skrajnej ścianki (działa w kilka sekund, jeśli jest O(n))
     @Test
     void performanceTest() {
         Cube c = new Cube(2000, (x,y)->{},(x,y)->{},()->{},()->{});
-        for (int i = 0; i < 100000; i++) {
+        for (int i = 0; i < 10000; i++) {
             new Thread(new Mover(0,0,c)).start();
             new Thread(new Mover(5,1999,c)).start();
         }
