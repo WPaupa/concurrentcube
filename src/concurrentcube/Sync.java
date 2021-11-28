@@ -23,7 +23,7 @@ public class Sync {
     private final Semaphore protection;
 
     private final int[] rotationsWaiting;
-    private final int[] repsInterrupted;
+    private boolean repInterrupted = false;
     private int currentAxis = -1;
     private int rotationsRunning;
     private int axesWaiting;
@@ -58,8 +58,8 @@ public class Sync {
                     waitingRotations[axis].acquire();
                     // jeśli reprezentant został przerwany, to oddał nam pozycję
                     // reprezentanta (my musimy zawiesić się na semaforze reprezentantów)
-                    if (repsInterrupted[axis] > 0) {
-                        repsInterrupted[axis]--;
+                    if (repInterrupted) {
+                        repInterrupted = false;
                         isRep = true;
                         mutex.release();
                         // nie oddajemy protection,
@@ -81,12 +81,12 @@ public class Sync {
                 } else if (waitingRotations[axis].tryAcquire()) {
                     // jeśli zostaliśmy wybudzeni dlatego, że mamy zostać nowym reprezentantem, to jednak
                     // nie możemy przejść i musimy posprzątać lub wybudzić nowego reprezentanta
-                    if (repsInterrupted[axis] > 0) {
+                    if (repInterrupted) {
                         rotationsWaiting[axis]--;
                         allRotationsWaiting--;
                         if (rotationsWaiting[axis] == 0) {
                             axesWaiting--;
-                            repsInterrupted[axis]--;
+                            repInterrupted = false;
                             mutex.release();
                             // nie oddajemy protection,
                             // bo dostaliśmy tylko mutexa
@@ -109,7 +109,7 @@ public class Sync {
                     // jeśli byliśmy reprezentantem,
                     // to musimy wyznaczyć nowego reprezentanta
                     else if (isRep) {
-                        repsInterrupted[axis]++;
+                        repInterrupted = true;
                         // przekazujemy sekcję krytyczną (tylko mutex)
                         waitingRotations[axis].release();
                     } else
@@ -215,7 +215,6 @@ public class Sync {
         protection = new Semaphore(1);
         waitingAxes = new Semaphore(0);
         waitingRotations = new Semaphore[4];
-        repsInterrupted = new int[4];
         for (int i = 0; i < 4; i++)
             waitingRotations[i] = new Semaphore(0);
         rotationsWaiting = new int[4];
