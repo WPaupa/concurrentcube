@@ -399,7 +399,7 @@ class CubeTest {
             System.out.println(cube.sync.currentAxis);
             System.out.println(cube.sync.rotationsRunning);
             System.out.println(Arrays.toString(cube.sync.rotationsWaiting));
-            System.out.println(Arrays.toString(cube.sync.repsInterrupted));
+            System.out.println(cube.sync.repInterrupted);
             System.out.println(cube.sync.mutex.availablePermits() + "w" + cube.sync.mutex.getQueueLength());
             System.out.println(cube.sync.interruptMutex.availablePermits() + "w" + cube.sync.interruptMutex.getQueueLength());
             System.out.println(cube.sync.protection.availablePermits() + "w" + cube.sync.protection.getQueueLength());
@@ -422,7 +422,7 @@ class CubeTest {
     @Test
     void testInt() {
         for (int i = 0; i < 1000; i++) {
-            System.out.println("=============");
+            System.out.println(i + "===========================");
             randomInterruptTest();
         }
     }

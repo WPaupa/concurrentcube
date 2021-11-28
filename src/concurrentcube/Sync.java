@@ -24,6 +24,7 @@ public class Sync {
 
     private final int[] rotationsWaiting;
     private boolean repInterrupted = false;
+    private final int[] stolenCrit;
     private int currentAxis = -1;
     private int rotationsRunning;
     private int axesWaiting;
@@ -81,9 +82,20 @@ public class Sync {
                 } else if (waitingRotations[axis].tryAcquire()) {
                     // jeśli zostaliśmy wybudzeni dlatego, że mamy zostać nowym reprezentantem, to jednak
                     // nie możemy przejść i musimy posprzątać lub wybudzić nowego reprezentanta
-                    if (repInterrupted) {
+                    if (isRep || repInterrupted) {
                         rotationsWaiting[axis]--;
                         allRotationsWaiting--;
+                        // tak samo jeśli została wybudzona kaskadowo nasza oś, a jesteśmy reprezentantem
+                        // (dość podły przeplot, ale tak może się zdarzyć),
+                        // to mamy i protection i mutex, i musimy je zwolnić
+                        if (isRep) {
+                            if (rotationsWaiting[axis] == 0)
+                                axesWaiting--;
+                            protection.release();
+                            mutex.release();
+                            interruptMutex.release();
+                            throw e;
+                        }
                         if (rotationsWaiting[axis] == 0) {
                             axesWaiting--;
                             repInterrupted = false;
@@ -98,12 +110,42 @@ public class Sync {
                         throw e;
                     }
                 } else {
-                    // bierzemy tylko mutexa, a nie protection, żeby można było nam go oddać
-                    mutex.acquireUninterruptibly();
+                    // jeśli od razu przed naszą obsługą przerwań została oddana sekcja krytyczna
+                    // (tylko mutex) potencjalnemu nowemu reprezentantowi, ale semafor czekających
+                    // rotacji stał się pusty w wyniku przerwania, to musimy tę sekcję krytyczną
+                    // ukraść, żeby nie doszło do zakleszczenia. Skoro semafor czekających jest pusty,
+                    // to zmniejszamy liczbę czekających osi (przerwany proces tego nie zrobi,
+                    // bo jeszcze nie jest reprezentantem). Tak samo za niego zmniejszamy liczbę działających
+                    // rotacji (i go o tym informujemy w zmiennej stolenCrit).
+                    if (repInterrupted) {
+                        for (int i = 0; i < 4; i++) {
+                            if (waitingRotations[i].tryAcquire()) {
+                                stolenCrit[i]++;
+                                repInterrupted = false;
+                                axesWaiting--;
+                                rotationsWaiting[i]--;
+                                allRotationsWaiting--;
+                            }
+                        }
+                    }
+                    // bierzemy tylko mutexa, a nie protection,
+                    // żeby można było nam go oddać przed kaskadowym budzeniem
+                    else
+                        mutex.acquireUninterruptibly();
+                    // jeśli ktoś mi ukradł sekcję krytyczną, to nie mam już nic do roboty
+                    if (stolenCrit[axis] > 0) {
+                        stolenCrit[axis]--;
+                        mutex.release();
+                        interruptMutex.release();
+                        throw e;
+                    }
                     rotationsWaiting[axis]--;
                     allRotationsWaiting--;
                     if (rotationsWaiting[axis] == 0) {
-                        axesWaiting--;
+                        // tylko reprezentant ma prawo zmniejszyć liczbę czekających osi
+                        // (są podłe przeploty, w których faktycznie tutaj może wejść niereprezentant)
+                        if (isRep)
+                            axesWaiting--;
                         mutex.release();
                     }
                     // jeśli byliśmy reprezentantem,
@@ -218,6 +260,7 @@ public class Sync {
         for (int i = 0; i < 4; i++)
             waitingRotations[i] = new Semaphore(0);
         rotationsWaiting = new int[4];
+        stolenCrit = new int[4];
         waitingForLayers = new Semaphore[size];
         for (int i = 0; i < size; i++)
             waitingForLayers[i] = new Semaphore(1);
